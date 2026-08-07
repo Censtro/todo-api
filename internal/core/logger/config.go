@@ -7,13 +7,13 @@ import (
 )
 
 type Config struct {
-	Level  string `envconfig:"LOGGER_LEVEL" required:"true"`
-	Folder string `envconfig:"LOGGER_FOLDER" required:"true"`
+	Level  string `envconfig:"LEVEL" default:"DEBUG"`
+	Folder string `envconfig:"FOLDER" required:"true"`
 }
 
 func NewConfig() (Config, error) {
 	var config Config
-	if err := envconfig.Process("", &config); err != nil {
+	if err := envconfig.Process("LOGGER", &config); err != nil {
 		return Config{}, fmt.Errorf("logger config: %w", err)
 	}
 	return config, nil

@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	core_logger "github.com/Censtro/todo-api/internal/core/logger"
-	core_postgres_pool "github.com/Censtro/todo-api/internal/core/repository/postgres/pool"
+	core_pgx_pool "github.com/Censtro/todo-api/internal/core/repository/postgres/pool/pgx"
 	core_http_middleware "github.com/Censtro/todo-api/internal/core/transport/http/middleware"
 	core_http_server "github.com/Censtro/todo-api/internal/core/transport/http/server"
 	user_postgres_repository "github.com/Censtro/todo-api/internal/features/users/repository/postgres"
@@ -34,11 +34,12 @@ func main() {
 	log.Debug("start app")
 
 	log.Debug("postgres pool initializing")
-	pool, err := core_postgres_pool.NewConnectionPool(
+
+	pool, err := core_pgx_pool.NewConnectionPool(
 		ctx,
-		core_postgres_pool.NewConfigMust(),
+		core_pgx_pool.NewConfigMust(),
 	)
-	fmt.Println(core_postgres_pool.NewConfigMust())
+
 	if err != nil {
 		log.Fatal("failed to init postgres connection pool", zap.Error(err))
 	}
@@ -57,9 +58,10 @@ func main() {
 		log,
 		core_http_middleware.RequestID(),
 		core_http_middleware.Logger(log),
-		core_http_middleware.Panic(),
 		core_http_middleware.Trace(),
+		core_http_middleware.Panic(),
 	)
+
 	server.RegisterAPIRouters(apiversionrouter)
 	log.Debug("Starting HTTP server")
 	if err := server.Run(ctx); err != nil {

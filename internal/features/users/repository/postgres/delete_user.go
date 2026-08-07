@@ -15,7 +15,7 @@ func (r *UserRepository) DeleteUser(
 	defer cancel()
 
 	query := `
-	DELETE from todoapp.users
+	DELETE FROM todoapp.users
 	WHERE id=$1
 	`
 

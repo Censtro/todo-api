@@ -7,7 +7,7 @@ import (
 
 	"github.com/Censtro/todo-api/internal/core/domain"
 	core_errors "github.com/Censtro/todo-api/internal/core/errors"
-	"github.com/jackc/pgx/v5"
+	core_postgres_pool "github.com/Censtro/todo-api/internal/core/repository/postgres/pool"
 )
 
 func (r *UserRepository) GetUser(
@@ -33,7 +33,7 @@ func (r *UserRepository) GetUser(
 		&userModel.PhoneNumber,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, core_postgres_pool.ErrNoRows) {
 			return domain.User{}, fmt.Errorf(
 				"user with id='%d': %w",
 				id,

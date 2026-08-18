@@ -15,13 +15,13 @@ type User struct {
 	PhoneNumber *string
 }
 
-func NewUserUnizialized(
+func NewUserUninitialized(
 	fullname string,
 	phonenumber *string,
 ) User {
 	return NewUser(
-		UnitializedID,
-		UnitializedVersion,
+		UninitializedID,
+		UninitializedVersion,
 		fullname,
 		phonenumber,
 	)

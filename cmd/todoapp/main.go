@@ -12,6 +12,9 @@ import (
 	core_pgx_pool "github.com/Censtro/todo-api/internal/core/repository/postgres/pool/pgx"
 	core_http_middleware "github.com/Censtro/todo-api/internal/core/transport/http/middleware"
 	core_http_server "github.com/Censtro/todo-api/internal/core/transport/http/server"
+	statistics_postgres_repository "github.com/Censtro/todo-api/internal/features/statistics/repository/postgres"
+	statistics_service "github.com/Censtro/todo-api/internal/features/statistics/service"
+	statistics_transport_http "github.com/Censtro/todo-api/internal/features/statistics/transport/http"
 	tasks_postgres_repository "github.com/Censtro/todo-api/internal/features/tasks/repository/postgres"
 	task_service "github.com/Censtro/todo-api/internal/features/tasks/service"
 	tasks_transport_http "github.com/Censtro/todo-api/internal/features/tasks/transport/http"
@@ -62,12 +65,18 @@ func main() {
 	tasksService := task_service.NewTasksService(taskRepository)
 	taskTransport := tasks_transport_http.NewTasksHTTPHandler(tasksService)
 
+	statisticsRepository := statistics_postgres_repository.NewStatisticRepository(pool)
+	statisticsService := statistics_service.NewStatisticsService(statisticsRepository)
+	statisticsTransport := statistics_transport_http.NewStatisticsHTTPHandler(statisticsService)
+
 	userroutes := usertransport.Routes()
 	taskRoutes := taskTransport.Routes()
+	statisticsRoutes := statisticsTransport.Routes()
 
 	apiversionrouter := core_http_server.NewAPIVersionRouter(core_http_server.APIVersion1)
 	apiversionrouter.RegisterRoute(userroutes...)
 	apiversionrouter.RegisterRoute(taskRoutes...)
+	apiversionrouter.RegisterRoute(statisticsRoutes...)
 
 	server := core_http_server.NewHTTPServer(
 		core_http_server.NewConfigMust(),

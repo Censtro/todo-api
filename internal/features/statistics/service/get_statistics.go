@@ -23,6 +23,7 @@ func (s *StatisticsService) GetStatistics(
 			)
 		}
 	}
+
 	tasks, err := s.statisticsRepository.GetTasks(ctx, userID, from, to)
 	if err != nil {
 		return domain.Statistics{}, fmt.Errorf("get tasks from repository: %w", err)

@@ -16,7 +16,7 @@ func NewStatistics(
 	taskAverageCompletionTime *time.Duration,
 ) Statistics {
 	return Statistics{
-		TasksCreated:               taskCompleted,
+		TasksCreated:               tasksCreated,
 		TasksCompleted:             taskCompleted,
 		TasksCompletedRate:         tasksCompletedRate,
 		TasksAverageCompletionTime: taskAverageCompletionTime,

@@ -24,11 +24,6 @@ func (r *StatisticsRepository) GetTasks(
 	FROM todoapp.tasks
 	`)
 
-	// query := `
-	// SELECT id, version, title, description, completed, created_at, completed_at, user_id
-	// FROM todoapp.tasks
-	// `
-
 	args := make([]any, 0, 3)
 	conditions := make([]string, 0, 3)
 

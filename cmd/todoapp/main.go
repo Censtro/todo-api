@@ -22,8 +22,15 @@ import (
 	users_service "github.com/Censtro/todo-api/internal/features/users/service"
 	user_transport_http "github.com/Censtro/todo-api/internal/features/users/transport/http"
 	"go.uber.org/zap"
+
+	_ "github.com/Censtro/todo-api/docs"
 )
 
+// @title Todo API
+// @version 1.0
+// @description Todo application REST API scheme
+// @host 127.0.0.1:5050
+// @BasePath /api/v1
 func main() {
 	timeZone := time.UTC
 
@@ -81,6 +88,7 @@ func main() {
 	server := core_http_server.NewHTTPServer(
 		core_http_server.NewConfigMust(),
 		log,
+		core_http_middleware.CORS(),
 		core_http_middleware.RequestID(),
 		core_http_middleware.Logger(log),
 		core_http_middleware.Trace(),
@@ -88,6 +96,9 @@ func main() {
 	)
 
 	server.RegisterAPIRouters(apiversionrouter)
+
+	server.RegisterSwagger()
+
 	log.Debug("Starting HTTP server")
 	if err := server.Run(ctx); err != nil {
 		log.Error("http server run error", zap.Error(err))

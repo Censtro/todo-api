@@ -78,6 +78,15 @@ func (p *ConnectionPool) Timeout() time.Duration {
 	return p.timeout
 }
 
+func (p *ConnectionPool) Begin(ctx context.Context) (core_postgres_pool.Tx, error) {
+	tx, err := p.Pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return PgxTx{Tx: tx}, nil
+}
+
 func (p *ConnectionPool) Query(ctx context.Context, sql string, args ...any) (core_postgres_pool.Rows, error) {
 	rows, err := p.Pool.Query(ctx, sql, args...)
 	if err != nil {

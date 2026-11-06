@@ -1,6 +1,7 @@
 package core_pgx_pool
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -47,4 +48,30 @@ type PgxRows struct {
 
 type PgxCommandTag struct {
 	pgconn.CommandTag
+}
+
+type PgxTx struct {
+	pgx.Tx
+}
+
+func (tx PgxTx) Query(ctx context.Context, sql string, args ...any) (core_postgres_pool.Rows, error) {
+	rows, err := tx.Tx.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	return PgxRows{rows}, nil
+}
+
+func (tx PgxTx) Exec(ctx context.Context, sql string, args ...any) (core_postgres_pool.CommandTag, error) {
+	tag, err := tx.Tx.Exec(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	return PgxCommandTag{tag}, nil
+}
+
+func (tx PgxTx) QueryRow(ctx context.Context, sql string, args ...any) core_postgres_pool.Row {
+	return PgxRow{tx.Tx.QueryRow(ctx, sql, args...)}
 }

@@ -9,6 +9,7 @@ import (
 
 type StatisticsService struct {
 	statisticsRepository StatisticsRepository
+	statisticsCache      StatisticsCache
 }
 
 type StatisticsRepository interface {
@@ -22,8 +23,10 @@ type StatisticsRepository interface {
 
 func NewStatisticsService(
 	statisticsRepository StatisticsRepository,
+	statisticsCache StatisticsCache,
 ) *StatisticsService {
 	return &StatisticsService{
 		statisticsRepository: statisticsRepository,
+		statisticsCache:      statisticsCache,
 	}
 }

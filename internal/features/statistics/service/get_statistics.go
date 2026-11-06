@@ -24,12 +24,24 @@ func (s *StatisticsService) GetStatistics(
 		}
 	}
 
+	cacheKey := statisticsCacheKey(userID, from, to)
+	if s.statisticsCache != nil {
+		cached, found, err := s.statisticsCache.Get(ctx, cacheKey)
+		if err == nil && found {
+			return cached, nil
+		}
+	}
+
 	tasks, err := s.statisticsRepository.GetTasks(ctx, userID, from, to)
 	if err != nil {
 		return domain.Statistics{}, fmt.Errorf("get tasks from repository: %w", err)
 	}
 
 	statistics := calcStatistics(tasks)
+
+	if s.statisticsCache != nil {
+		_ = s.statisticsCache.Set(ctx, cacheKey, statistics)
+	}
 
 	return statistics, nil
 }
@@ -60,4 +72,30 @@ func calcStatistics(tasks []domain.Task) domain.Statistics {
 	}
 
 	return domain.NewStatistics(tasksCreated, tasksCompleted, &tasksCompletedRate, taskAverageCompletionTime)
+}
+
+func statisticsCacheKey(
+	userID *int,
+	from *time.Time,
+	to *time.Time,
+) string {
+	userKey := "all"
+	if userID != nil {
+		userKey = fmt.Sprintf("%d", *userID)
+	}
+
+	return fmt.Sprintf(
+		"statistics:v1:user:%s:from:%s:to:%s",
+		userKey,
+		statisticsTimeKey(from),
+		statisticsTimeKey(to),
+	)
+}
+
+func statisticsTimeKey(value *time.Time) string {
+	if value == nil {
+		return "none"
+	}
+
+	return value.UTC().Format(time.RFC3339Nano)
 }

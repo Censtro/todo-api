@@ -14,6 +14,7 @@ import (
 	core_http_server "github.com/Censtro/todo-api/internal/core/transport/http/server"
 	statistics_postgres_repository "github.com/Censtro/todo-api/internal/features/statistics/repository/postgres"
 	statistics_service "github.com/Censtro/todo-api/internal/features/statistics/service"
+	statistics_cache "github.com/Censtro/todo-api/internal/features/statistics/service/cache/redis"
 	statistics_transport_http "github.com/Censtro/todo-api/internal/features/statistics/transport/http"
 	tasks_postgres_repository "github.com/Censtro/todo-api/internal/features/tasks/repository/postgres"
 	task_service "github.com/Censtro/todo-api/internal/features/tasks/service"
@@ -21,6 +22,7 @@ import (
 	user_postgres_repository "github.com/Censtro/todo-api/internal/features/users/repository/postgres"
 	users_service "github.com/Censtro/todo-api/internal/features/users/service"
 	user_transport_http "github.com/Censtro/todo-api/internal/features/users/transport/http"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
 	_ "github.com/Censtro/todo-api/docs"
@@ -73,7 +75,23 @@ func main() {
 	taskTransport := tasks_transport_http.NewTasksHTTPHandler(tasksService)
 
 	statisticsRepository := statistics_postgres_repository.NewStatisticRepository(pool)
-	statisticsService := statistics_service.NewStatisticsService(statisticsRepository)
+
+	redisConfig := statistics_cache.NewConfigMust()
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     redisConfig.Addr,
+		Password: redisConfig.Password,
+		DB:       redisConfig.DB,
+	})
+	defer redisClient.Close()
+
+	statisticsCache, err := statistics_cache.New(redisClient, redisConfig.TTL)
+	if err != nil {
+		log.Fatal("failed to init statistics Redis cache")
+	}
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		log.Warn("Redis unavailable", zap.Error(err))
+	}
+	statisticsService := statistics_service.NewStatisticsService(statisticsRepository, statisticsCache)
 	statisticsTransport := statistics_transport_http.NewStatisticsHTTPHandler(statisticsService)
 
 	userroutes := usertransport.Routes()

@@ -53,9 +53,12 @@ migrate-action:
 
 todoapp-run:
 	@export LOGGER_FOLDER=${PROJECT_ROOT}/out/logs && \
-	export POSTGRES_HOST=0.0.0.0 && \
+	export POSTGRES_HOST=127.0.0.1 && \
 	go mod tidy && \
 	go run ${PROJECT_ROOT}/cmd/todoapp/main.go
+
+redis-up:
+	@docker compose up -d redis
 
 todoapp-deploy:
 	@docker compose up -d --build todoapp

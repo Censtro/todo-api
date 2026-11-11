@@ -8,6 +8,7 @@ import (
 	"github.com/Censtro/todo-api/internal/core/domain"
 	core_errors "github.com/Censtro/todo-api/internal/core/errors"
 	core_postgres_pool "github.com/Censtro/todo-api/internal/core/repository/postgres/pool"
+	task_events "github.com/Censtro/todo-api/internal/features/tasks/events"
 )
 
 func (r *TaskRepository) PatchTask(
@@ -17,6 +18,12 @@ func (r *TaskRepository) PatchTask(
 ) (domain.Task, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.Timeout())
 	defer cancel()
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.Task{}, fmt.Errorf("begin patch task transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	query := `
 	UPDATE todoapp.tasks
@@ -39,7 +46,7 @@ func (r *TaskRepository) PatchTask(
 		user_id;
 	`
 
-	row := r.pool.QueryRow(
+	row := tx.QueryRow(
 		ctx,
 		query,
 		task.Title,
@@ -52,7 +59,7 @@ func (r *TaskRepository) PatchTask(
 
 	var taskModel TaskModel
 
-	err := row.Scan(
+	err = row.Scan(
 		&taskModel.ID,
 		&taskModel.Version,
 		&taskModel.Title,
@@ -75,6 +82,13 @@ func (r *TaskRepository) PatchTask(
 	}
 
 	taskDomain := taskDomainFromModel(taskModel)
+	if err := insertTaskOutboxEvent(ctx, tx, task_events.TaskUpdated, taskDomain); err != nil {
+		return domain.Task{}, fmt.Errorf("insert task-updated outbox event: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Task{}, fmt.Errorf("commit patch task transaction: %w", err)
+	}
 
 	return taskDomain, nil
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/Censtro/todo-api/docs"
 	core_logger "github.com/Censtro/todo-api/internal/core/logger"
@@ -62,6 +63,24 @@ func (s *HTTPServer) RegisterSwagger() {
 			_, _ = w.Write([]byte(docs.SwaggerInfo.ReadDoc()))
 		},
 	)
+}
+
+func (s *HTTPServer) RegisterHealthChecks(readinessCheck func(context.Context) error) {
+	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	s.mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if readinessCheck != nil {
+			if err := readinessCheck(ctx); err != nil {
+				http.Error(w, "not ready", http.StatusServiceUnavailable)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 }
 
 func (s *HTTPServer) Run(ctx context.Context) error {

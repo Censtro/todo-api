@@ -8,6 +8,7 @@ import (
 	"github.com/Censtro/todo-api/internal/core/domain"
 	core_errors "github.com/Censtro/todo-api/internal/core/errors"
 	core_postgres_pool "github.com/Censtro/todo-api/internal/core/repository/postgres/pool"
+	task_events "github.com/Censtro/todo-api/internal/features/tasks/events"
 )
 
 func (r *TaskRepository) CreateTask(
@@ -17,12 +18,18 @@ func (r *TaskRepository) CreateTask(
 	ctx, cancel := context.WithTimeout(ctx, r.pool.Timeout())
 	defer cancel()
 
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.Task{}, fmt.Errorf("begin create task transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	query := `
 	INSERT INTO todoapp.tasks (title, description, completed, created_at, completed_at, user_id)
 	VALUES ($1, $2, $3, $4, $5, $6)
 	RETURNING id, version, title, description, completed, created_at, completed_at, user_id;`
 
-	row := r.pool.QueryRow(
+	row := tx.QueryRow(
 		ctx,
 		query,
 		task.Title,
@@ -34,7 +41,7 @@ func (r *TaskRepository) CreateTask(
 	)
 
 	var taskModel TaskModel
-	err := row.Scan(
+	err = row.Scan(
 		&taskModel.ID,
 		&taskModel.Version,
 		&taskModel.Title,
@@ -58,6 +65,13 @@ func (r *TaskRepository) CreateTask(
 	}
 
 	taskDomain := taskDomainFromModel(taskModel)
+	if err := insertTaskOutboxEvent(ctx, tx, task_events.TaskCreated, taskDomain); err != nil {
+		return domain.Task{}, fmt.Errorf("insert task-created outbox event: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Task{}, fmt.Errorf("commit create task transaction: %w", err)
+	}
 
 	return taskDomain, nil
 }

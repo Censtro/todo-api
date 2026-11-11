@@ -16,6 +16,8 @@ import (
 	statistics_service "github.com/Censtro/todo-api/internal/features/statistics/service"
 	statistics_cache "github.com/Censtro/todo-api/internal/features/statistics/service/cache/redis"
 	statistics_transport_http "github.com/Censtro/todo-api/internal/features/statistics/transport/http"
+	task_events "github.com/Censtro/todo-api/internal/features/tasks/events"
+	task_events_kafka "github.com/Censtro/todo-api/internal/features/tasks/events/kafka"
 	tasks_postgres_repository "github.com/Censtro/todo-api/internal/features/tasks/repository/postgres"
 	task_service "github.com/Censtro/todo-api/internal/features/tasks/service"
 	tasks_transport_http "github.com/Censtro/todo-api/internal/features/tasks/transport/http"
@@ -74,6 +76,20 @@ func main() {
 	tasksService := task_service.NewTasksService(taskRepository)
 	taskTransport := tasks_transport_http.NewTasksHTTPHandler(tasksService)
 
+	taskEventsConfig := task_events.NewConfigMust()
+	eventProducer := task_events_kafka.NewProducer(taskEventsConfig.Brokers, taskEventsConfig.Topic)
+	defer func() {
+		if err := eventProducer.Close(); err != nil {
+			log.Error("failed to close Kafka producer", zap.Error(err))
+		}
+	}()
+	outboxPublisher := task_events.NewOutboxPublisher(taskRepository, eventProducer, log.Logger, taskEventsConfig)
+	publisherDone := make(chan struct{})
+	go func() {
+		defer close(publisherDone)
+		outboxPublisher.Run(ctx)
+	}()
+
 	statisticsRepository := statistics_postgres_repository.NewStatisticRepository(pool)
 
 	redisConfig := statistics_cache.NewConfigMust()
@@ -112,6 +128,7 @@ func main() {
 		core_http_middleware.Trace(),
 		core_http_middleware.Panic(),
 	)
+	server.RegisterHealthChecks(pool.Ping)
 
 	server.RegisterAPIRouters(apiversionrouter)
 
@@ -121,5 +138,7 @@ func main() {
 	if err := server.Run(ctx); err != nil {
 		log.Error("http server run error", zap.Error(err))
 	}
+	cancel()
+	<-publisherDone
 
 }

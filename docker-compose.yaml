@@ -1,12 +1,16 @@
 services:
 
   todoapp:
+    image: todo-api:dev
     build:
       context: ${PROJECT_ROOT}
       dockerfile: ${PROJECT_ROOT}/cmd/todoapp/Dockerfile
     container_name: todoapp
     depends_on:
-      - redis
+      todoapp-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       - HTTP_ADDRESS=${HTTP_ADDRESS}
       - HTTP_SHUTDOWN_TIMEOUT=${HTTP_SHUTDOWN_TIMEOUT}
@@ -21,11 +25,49 @@ services:
       - STATISTICS_CACHE_REDIS_PASSWORD=${STATISTICS_CACHE_REDIS_PASSWORD:-}
       - STATISTICS_CACHE_REDIS_DB=${STATISTICS_CACHE_REDIS_DB:-0}
       - STATISTICS_CACHE_REDIS_TTL=${STATISTICS_CACHE_REDIS_TTL:-30s}
+      - TASK_EVENTS_BROKERS=kafka:29092
+      - TASK_EVENTS_TOPIC=${TASK_EVENTS_TOPIC:-todo.task-events.v1}
+      - TASK_EVENTS_DEAD_LETTER_TOPIC=${TASK_EVENTS_DEAD_LETTER_TOPIC:-todo.task-events.v1.dlq}
+      - TASK_EVENTS_CONSUMER_GROUP=${TASK_EVENTS_CONSUMER_GROUP:-todo-task-audit-v1}
+      - TASK_EVENTS_POLL_INTERVAL=${TASK_EVENTS_POLL_INTERVAL:-500ms}
+      - TASK_EVENTS_LEASE_DURATION=${TASK_EVENTS_LEASE_DURATION:-30s}
+      - TASK_EVENTS_BATCH_SIZE=${TASK_EVENTS_BATCH_SIZE:-50}
     volumes:
       - logs:/app/out/logs
     ports:
       - "5050:5050"
     restart: always
+
+  task-audit-consumer:
+    image: todo-api:dev
+    build:
+      context: ${PROJECT_ROOT}
+      dockerfile: ${PROJECT_ROOT}/cmd/todoapp/Dockerfile
+    container_name: todoapp-task-audit-consumer
+    command: ["/app/task-audit-consumer"]
+    depends_on:
+      todoapp-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_TIMEOUT=${POSTGRES_TIMEOUT}
+      - POSTGRES_HOST=todoapp-postgres
+      - LOGGER_LEVEL=${LOGGER_LEVEL}
+      - LOGGER_FOLDER=/app/out/logs
+      - TASK_EVENTS_BROKERS=kafka:29092
+      - TASK_EVENTS_TOPIC=${TASK_EVENTS_TOPIC:-todo.task-events.v1}
+      - TASK_EVENTS_DEAD_LETTER_TOPIC=${TASK_EVENTS_DEAD_LETTER_TOPIC:-todo.task-events.v1.dlq}
+      - TASK_EVENTS_CONSUMER_GROUP=${TASK_EVENTS_CONSUMER_GROUP:-todo-task-audit-v1}
+      - TASK_EVENTS_POLL_INTERVAL=${TASK_EVENTS_POLL_INTERVAL:-500ms}
+      - TASK_EVENTS_LEASE_DURATION=${TASK_EVENTS_LEASE_DURATION:-30s}
+      - TASK_EVENTS_BATCH_SIZE=${TASK_EVENTS_BATCH_SIZE:-50}
+    volumes:
+      - logs:/app/out/logs
+    restart: unless-stopped
   
   redis:
     image: redis:7-alpine
@@ -39,6 +81,35 @@ services:
       retries: 5
     restart: unless-stopped
 
+  kafka:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: todoapp-kafka
+    ports:
+      - "127.0.0.1:9092:9092"
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    restart: unless-stopped
+
   todoapp-postgres:
     image: postgres:17-bookworm
     container_name: todoapp-postgres
@@ -48,6 +119,11 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: always
 
   migrate-postgres:
@@ -77,3 +153,4 @@ services:
 volumes:
   pgdata:
   logs:
+  kafkadata:

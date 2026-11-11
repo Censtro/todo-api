@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-audit-consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: task-audit-consumer
+  template:
+    metadata:
+      labels:
+        app: task-audit-consumer
+    spec:
+      containers:
+        - name: task-audit-consumer
+          image: todo-api:dev
+          imagePullPolicy: IfNotPresent
+          command: ["/app/task-audit-consumer"]
+          envFrom:
+            - configMapRef:
+                name: todo-api-config
+            - secretRef:
+                name: todo-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
